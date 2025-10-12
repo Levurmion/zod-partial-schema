@@ -65,39 +65,60 @@ type ZodDataTypes = {
   never: core.$ZodNever;
 };
 
-type GetZodTypeFor<T> = Extract<
+type GetZodType<T> = Extract<
   ValueOf<Pick<ZodDataTypes, keyof PickLikeValue<DataTypes, T>>>,
   core.$ZodType
 >;
+
+type IncludeZodPipe<T, ZodType extends core.$ZodType> = core.$ZodPipe<
+  ZodType,
+  core.$ZodTransform<unknown, T>
+>;
+
+type GetZodTypeWithPipe<T> = GetZodType<T> | IncludeZodPipe<T, GetZodType<T>>;
 
 type ExtractZodType<T> = Extract<T, core.$ZodType>;
 
 export type MapTypeToZodType<T> = IsLiteral<T> extends true
   ? MapTypeToZodType_Literal<T>
   : IsObject<T> extends true
-  ? core.$ZodObject<MapTypeToZodType_Object<T>>
+  ? MapTypeToZodType_Object<T>
   : T extends unknown[]
   ? IsTuple<T> extends true
-    ? core.$ZodTuple<MapTypeToZodType_Tuple<T>>
+    ? MapTypeToZodType_Tuple<T>
     : IsArray<T> extends true
-    ? core.$ZodArray<MapTypeToZodType_Array<T>>
+    ? MapTypeToZodType_Array<T>
     : core.$ZodNever
-  : GetZodTypeFor<T>;
+  : GetZodTypeWithPipe<T>;
 
-type MapTypeToZodType_Object<T> = {
-  [K in keyof T]: MapTypeToZodType<T[K]>;
-};
+type MapTypeToZodType_Object<T> =
+  | core.$ZodObject<{
+      [K in keyof T]: MapTypeToZodType<T[K]>;
+    }>
+  | IncludeZodPipe<
+      T,
+      core.$ZodObject<{
+        [K in keyof T]: MapTypeToZodType<T[K]>;
+      }>
+    >;
 
-type MapTypeToZodType_Tuple<T extends unknown[]> = [] extends T
+type MapTypeToZodType_Tuple<T extends unknown[]> =
+  | core.$ZodTuple<MapTypeToZodType_Tuple_Impl<T>>
+  | IncludeZodPipe<T, core.$ZodTuple<MapTypeToZodType_Tuple_Impl<T>>>;
+
+type MapTypeToZodType_Tuple_Impl<T extends unknown[]> = [] extends T
   ? []
   : T extends [infer First, ...infer Rest]
-  ? [MapTypeToZodType<First>, ...MapTypeToZodType_Tuple<Rest>]
+  ? [MapTypeToZodType<First>, ...MapTypeToZodType_Tuple_Impl<Rest>]
   : never;
 
-type MapTypeToZodType_Array<T extends unknown[]> = ExtractZodType<
-  MapTypeToZodType<T[number]>
->;
+type MapTypeToZodType_Array<T extends unknown[]> =
+  | core.$ZodArray<ExtractZodType<MapTypeToZodType<T[number]>>>
+  | IncludeZodPipe<
+      T,
+      core.$ZodArray<ExtractZodType<MapTypeToZodType<T[number]>>>
+    >;
 
-type MapTypeToZodType_Literal<T> = core.$ZodLiteral<
-  Extract<T, core.util.Literal>
->;
+type MapTypeToZodType_Literal<T> =
+  | core.$ZodLiteral<Extract<T, core.util.Literal>>
+  | IncludeZodPipe<T, core.$ZodLiteral<Extract<T, core.util.Literal>>>;

@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
 import type { MapTypeToZodType } from "./zod-types";
+import type { Merge } from "type-fest";
 
 export const createTypedStrictObject =
   <T extends core.$ZodLooseShape>() =>
@@ -23,9 +24,10 @@ export const createTypedLooseObject =
   >(
     shape: Shape
   ) => {
+    type ShapeType = z.ZodObject<Extract<Shape, core.$ZodShape>>;
     return z.looseObject(shape) as z.ZodObject<
-      Extract<Required<Shape>, core.$ZodShape>,
-      { in: T; out: T }
+      Extract<Shape, core.$ZodShape>,
+      { in: T; out: Merge<T, z.output<ShapeType>> }
     >;
   };
 
@@ -34,23 +36,27 @@ type T = {
   b: string;
   c: boolean;
   x: [1, 2];
-  obj?: {
+  obj: {
     d: string[];
-    e: [null, undefined];
   };
 };
-
-type X = MapTypeToZodType<T>;
 
 createTypedStrictObject<T>()({
   a: z.string(),
   b: z.string(),
   c: z.boolean(),
   x: z.tuple([z.literal(1), z.literal(2)]),
-}).transform(({ a, b, c, x }) => {});
+  obj: z.object({
+    d: z.array(z.string()).transform((arr) => arr.map((i) => parseInt(i))),
+  }),
+}).transform(({ a, b, c, x, obj }) => ({ a, b, c, x }));
 
 createTypedLooseObject<T>()({
-  a: z.string(),
-  b: z.string(),
+  a: z.string().transform((v) => parseInt(v)),
   c: z.boolean(),
-}).transform(({ a, b, c, ...rest }) => {});
+  obj: z
+    .object({
+      d: z.array(z.string()),
+    })
+    .transform(({ d }) => ({ d_trans: d.map((i) => parseInt(i)) })),
+}).transform(({ a, b, c, obj, ...rest }) => {});
