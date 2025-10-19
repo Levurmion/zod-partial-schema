@@ -1,6 +1,6 @@
 import type { IsLiteral } from "type-fest";
 import * as z from "zod/v4";
-import type { IsObject } from "./types";
+import type { FunctionType, IsObject } from "./types";
 
 // ===== NAKED TYPES =====
 
@@ -75,6 +75,10 @@ type GetConfigNakedType<Original> = Extract<
 
 // ===== PRODUCT TYPES =====
 
+// brand for nominal typing
+declare const __config: unique symbol;
+export type ConfigBrand = { [__config]: true };
+
 export type ObjectOriginal = { [k: string]: OriginalTypes };
 
 // strict objects
@@ -89,28 +93,13 @@ export function createStrictObjectConstructor<
     shape: Shape
   ) {
     class StrictObject {
-      _zodParser: typeof z.strictObject;
-      _original: Original;
+      _zodParser = z.strictObject;
+      _original = {} as Original;
+      _type: "strict" = "strict";
       _shape: Shape;
-      _type: "strict";
 
       constructor(shape: Shape) {
-        this._zodParser = z.strictObject;
-        this._original = {} as Original;
         this._shape = shape;
-        this._type = "strict";
-      }
-
-      getZodType(
-        recursiveInitialiser: <Config extends ConfigNode>(
-          config: Config
-        ) => UnpackedConfigNode
-      ) {
-        const unpackedShape: Record<string, UnpackedConfigNode> = {};
-        for (const [key, node] of Object.entries(this._shape)) {
-          unpackedShape[key] = recursiveInitialiser(node);
-        }
-        return this._zodParser(unpackedShape);
       }
     }
 
@@ -137,30 +126,13 @@ export function createLooseObjectConstructor<
     shape: Shape
   ) {
     class LooseObject {
-      _zodParser: typeof z.looseObject;
-      _original: Original;
+      _zodParser = z.looseObject;
+      _original = {} as Original;
+      _type: "loose" = "loose";
       _shape: Shape;
-      _type: "loose";
 
       constructor(shape: Shape) {
-        this._zodParser = z.looseObject;
-        this._original = {} as Original;
         this._shape = shape;
-        this._type = "loose";
-      }
-
-      getZodType(
-        recursiveInitialiser: <Config extends ConfigNode>(
-          config: Config
-        ) => UnpackedConfigNode
-      ) {
-        const unpackedShape: Record<string, UnpackedConfigNode> = {};
-        for (const [key, node] of Object.entries(this._shape)) {
-          if (node) {
-            unpackedShape[key] = recursiveInitialiser(node);
-          }
-        }
-        return this._zodParser(unpackedShape);
       }
     }
 
@@ -184,6 +156,15 @@ export type ConfigProductTypeOptions = {
 export type ConfigProductTypes = (
   options: ConfigProductTypeOptions
 ) => ReturnType<ConfigProductTypeOptions[keyof ConfigProductTypeOptions]>;
+
+// ===== PRODUCT TYPE UTILITIES =====
+
+export type InferProductTypeOriginal<ProductType> = Extract<
+  ProductType,
+  FunctionType
+> extends infer T extends ConfigProductTypes
+  ? ReturnType<T>["_original"]
+  : never;
 
 // ===== ALL TYPES =====
 
@@ -223,10 +204,12 @@ export function createConfig<Original extends OriginalTypes>() {
 
 // ===== CONFIG UNPACKER GENERIC =====
 
-export type UnpackConfig<Config> = Config extends (...args: any[]) => any
-  ? z.ZodObject<{
-      [K in keyof ReturnType<Config>["_shape"]]: UnpackConfig<
-        Exclude<ReturnType<Config>["_shape"][K], undefined>
-      >;
-    }>
-  : Config;
+export type UnpackConfig<Config> = Config extends FunctionType
+  ? UnpackConfig_ProductType<Config>
+  : Extract<Config, ConfigNakedTypes>;
+
+type UnpackConfig_ProductType<Config extends ConfigProductTypes> = z.ZodObject<{
+  [K in keyof ReturnType<Config>["_shape"]]: UnpackConfig<
+    Exclude<ReturnType<Config>["_shape"][K], undefined>
+  >;
+}>;

@@ -15,3 +15,5 @@ export type IsTuple<T> = T extends readonly [...unknown[]]
 export type PickLikeValue<T, V> = IsObject<T> extends true
   ? { [K in keyof T as V extends T[K] ? K : never]: T[K] }
   : never;
+
+export type FunctionType = (...args: any[]) => any;
