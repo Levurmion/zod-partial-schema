@@ -46,7 +46,7 @@ type SymbolTypes = z.ZodSymbol;
 
 type DateTypes = z.ZodDate;
 
-type BooleanTypes = z.ZodBoolean | z.ZodLiteral<true> | z.ZodLiteral<false>;
+type BooleanTypes = z.ZodBoolean;
 
 type ConfigNakedTypes =
   | StringTypes
@@ -86,7 +86,10 @@ type StrictObjectShape<Original extends ObjectOriginal> = {
   [K in keyof Original]: CreateConfig<Original[K]>;
 };
 
-class StrictObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
+export class StrictObject<
+  Original extends ObjectOriginal,
+  Shape extends ObjectShape
+> {
   [__productType] = true;
   _zodParser = z.strictObject;
   _original = {} as Original;
@@ -120,7 +123,10 @@ type LooseObjectShape<Original extends ObjectOriginal> = Partial<{
   [K in keyof Original]: CreateConfig<Original[K]>;
 }>;
 
-class LooseObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
+export class LooseObject<
+  Original extends ObjectOriginal,
+  Shape extends ObjectShape
+> {
   [__productType] = true;
   _zodParser = z.looseObject;
   _original = {} as Original;
@@ -165,6 +171,10 @@ export type ConfigProductTypeBuilder = (
   options: ConfigProductTypeOptions
 ) => ReturnType<ConfigProductTypeOptions[keyof ConfigProductTypeOptions]>;
 
+export type ProductTypeNode =
+  | StrictObject<ObjectOriginal, ObjectShape>
+  | LooseObject<ObjectOriginal, ObjectShape>;
+
 // ===== PRODUCT TYPE UTILITIES =====
 
 export type InferProductTypeOriginal<ProductType> = Extract<
@@ -190,10 +200,7 @@ export type OriginalTypes = OriginalNakedTypes | { [k: string]: OriginalTypes };
 export type ConfigNode = ConfigNakedTypes | ConfigProductTypeBuilder;
 
 // Nodes after all builders have been called and resolved
-export type UnpackedConfigNode =
-  | ConfigNakedTypes
-  | StrictObject<ObjectOriginal, ObjectShape>
-  | LooseObject<ObjectOriginal, ObjectShape>;
+export type UnpackedConfigNode = ConfigNakedTypes | ProductTypeNode;
 
 // ===== CONFIG CREATOR GENERIC =====
 
@@ -238,4 +245,18 @@ type UnpackConfig_ProductType<Config extends ConfigProductTypeBuilder> =
       : ProductType extends LooseObject<infer O, infer S>
       ? LooseObject<O, { [K in keyof S]: UnpackConfig<S[K]> }>
       : never
+    : never;
+
+// ===== ZOD TYPE DERIVATION GENERIC =====
+
+export type DeriveZodType<Node> = Extract<
+  Node extends ProductTypeNode ? DeriveZodType_ProductType<Node> : Node,
+  z.ZodType
+>;
+
+type DeriveZodType_ProductType<Node extends ProductTypeNode> =
+  Node extends LooseObject<ObjectOriginal, infer Shape>
+    ? z.ZodObject<{ [K in keyof Shape]: DeriveZodType<Shape[K]> }, core.$loose>
+    : Node extends StrictObject<ObjectOriginal, infer Shape>
+    ? z.ZodObject<{ [K in keyof Shape]: DeriveZodType<Shape[K]> }, core.$strict>
     : never;

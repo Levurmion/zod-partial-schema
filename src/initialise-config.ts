@@ -3,9 +3,13 @@ import {
   createConfig,
   createLooseObjectConstructor,
   createStrictObjectConstructor,
+  LooseObject,
+  StrictObject,
   type ConfigProductTypeBuilder,
   type CreateConfig,
+  type DeriveZodType,
   type InferProductTypeOriginal,
+  type ProductTypeNode,
   type UnpackConfig,
   type UnpackedConfigNode,
 } from "./config-types";
@@ -84,4 +88,28 @@ export function initialiseConfig<Config>(config: Config): UnpackConfig<Config> {
   }
 }
 
+const isProductTypeNode = (node: unknown): node is ProductTypeNode => {
+  return node instanceof StrictObject || node instanceof LooseObject;
+};
+
+export function deriveZodType<UnpackedConfig>(
+  unpackedConfig: UnpackedConfig
+): DeriveZodType<UnpackedConfig> {
+  if (isProductTypeNode(unpackedConfig)) {
+    const nodeShape = unpackedConfig._shape;
+
+    const derivedNodeShape: Record<string, z.ZodType> = {};
+    for (const [k, node] of Object.entries(nodeShape)) {
+      derivedNodeShape[k] = deriveZodType(node);
+    }
+
+    return unpackedConfig._zodParser(
+      nodeShape
+    ) as DeriveZodType<UnpackedConfig>;
+  } else {
+    return unpackedConfig as DeriveZodType<UnpackedConfig>;
+  }
+}
+
 const initialisedConfig = initialiseConfig(config);
+const derivedConfig = deriveZodType(initialisedConfig);
