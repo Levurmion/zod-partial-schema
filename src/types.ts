@@ -17,3 +17,5 @@ export type PickLikeValue<T, V> = IsObject<T> extends true
   : never;
 
 export type FunctionType = (...args: any[]) => any;
+
+export type Call<Fn extends FunctionType> = ReturnType<Fn>;

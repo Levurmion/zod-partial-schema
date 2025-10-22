@@ -37,9 +37,7 @@ const config = createConfig<Example>()(({ loose }) =>
   })
 );
 
-type Unpacked = UnpackConfig<
-  typeof config
->["_unpackedShape"]["a"]["_unpackedShape"];
+type Unpacked = UnpackConfig<typeof config>;
 
 function isProductTypeConfig(
   config: unknown

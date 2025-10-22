@@ -1,5 +1,5 @@
 import type { IsLiteral, Merge } from "type-fest";
-import type { FunctionType, IsObject } from "./types";
+import type { Call, FunctionType, IsObject } from "./types";
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
 
@@ -77,7 +77,7 @@ type GetConfigNakedType<Original> = Extract<
 // ===== PRODUCT TYPES =====
 
 export type ObjectOriginal = { [k: string]: OriginalTypes };
-export type ObjectShape = Record<string, any>;
+export type ObjectShape = Record<string, unknown>;
 
 // strict objects
 type StrictObjectShape<Original extends ObjectOriginal> = {
@@ -89,7 +89,6 @@ class StrictObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
   _original = {} as Original;
   _type: "strict" = "strict";
   _shape: Shape;
-  _unpackedShape = {} as { [K in keyof Shape]: UnpackConfig<Shape[K]> };
 
   constructor(shape: Shape) {
     this._shape = shape;
@@ -123,7 +122,6 @@ class LooseObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
   _original = {} as Original;
   _type: "loose" = "loose";
   _shape: Shape;
-  _unpackedShape = {} as { [K in keyof Shape]: UnpackConfig<Shape[K]> };
 
   constructor(shape: Shape) {
     this._shape = shape;
@@ -174,8 +172,13 @@ export type InferProductTypeOriginal<ProductType> = Extract<
 
 // ===== ALL TYPES =====
 
+// permitted types that can be mapped to Zod types and builders
 export type OriginalTypes = OriginalNakedTypes | { [k: string]: OriginalTypes };
+
+// emitted configuration nodes with respect to the passed OriginalTypes
 export type ConfigNode = ConfigNakedTypes | ConfigProductTypeBuilder;
+
+// Nodes after all builders have been called and resolved
 export type UnpackedConfigNode =
   | ConfigNakedTypes
   | StrictObject<ObjectOriginal, ObjectShape>
@@ -218,4 +221,10 @@ export type UnpackConfig<Config> = Config extends FunctionType
   : Extract<Config, ConfigNakedTypes>;
 
 type UnpackConfig_ProductType<Config extends ConfigProductTypeBuilder> =
-  ReturnType<Config>;
+  Call<Config> extends infer ProductType extends ConfigProductType
+    ? ProductType extends StrictObject<infer O, infer S>
+      ? StrictObject<O, { [K in keyof S]: UnpackConfig<S[K]> }>
+      : ProductType extends LooseObject<infer O, infer S>
+      ? LooseObject<O, { [K in keyof S]: UnpackConfig<S[K]> }>
+      : never
+    : never;
