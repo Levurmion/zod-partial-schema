@@ -1,4 +1,5 @@
 import {
+  __productType,
   createConfig,
   createLooseObjectConstructor,
   createStrictObjectConstructor,
@@ -37,16 +38,21 @@ const config = createConfig<Example>()(({ loose }) =>
   })
 );
 
-type Unpacked = UnpackConfig<typeof config>;
-
-function isProductTypeConfig(
+/**
+ * If we encounter a function, we can only assume now that this is probably a builder
+ * function. As to whether it is a valid `ConfigProductTypeBuilder`, we have to still
+ * nominally introspect the return type after calling it.
+ */
+function isMaybeProductTypeConfigNode(
   config: unknown
 ): config is ConfigProductTypeBuilder {
   return typeof config === "function";
 }
 
+const ALLOWED_BUILDER_RETURNS = ["StrictObject", "LooseObject"];
+
 export function initialiseConfig<Config>(config: Config): UnpackConfig<Config> {
-  if (isProductTypeConfig(config)) {
+  if (isMaybeProductTypeConfigNode(config)) {
     type ConfigOriginal = InferProductTypeOriginal<Config>;
 
     const options = {
@@ -55,6 +61,14 @@ export function initialiseConfig<Config>(config: Config): UnpackConfig<Config> {
     };
 
     const productType = config(options);
+    if (!(__productType in productType)) {
+      throw new Error(
+        `Builder callbacks can only return: ${ALLOWED_BUILDER_RETURNS.join(
+          ","
+        )}`
+      );
+    }
+
     const productTypeShape = productType._shape;
     const unpackedProductTypeShape: Record<string, UnpackedConfigNode> = {};
 

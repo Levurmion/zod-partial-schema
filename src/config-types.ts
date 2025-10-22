@@ -76,6 +76,8 @@ type GetConfigNakedType<Original> = Extract<
 
 // ===== PRODUCT TYPES =====
 
+export declare const __productType: unique symbol;
+
 export type ObjectOriginal = { [k: string]: OriginalTypes };
 export type ObjectShape = Record<string, unknown>;
 
@@ -85,6 +87,7 @@ type StrictObjectShape<Original extends ObjectOriginal> = {
 };
 
 class StrictObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
+  [__productType] = true;
   _zodParser = z.strictObject;
   _original = {} as Original;
   _type: "strict" = "strict";
@@ -118,6 +121,7 @@ type LooseObjectShape<Original extends ObjectOriginal> = Partial<{
 }>;
 
 class LooseObject<Original extends ObjectOriginal, Shape extends ObjectShape> {
+  [__productType] = true;
   _zodParser = z.looseObject;
   _original = {} as Original;
   _type: "loose" = "loose";
@@ -167,7 +171,14 @@ export type InferProductTypeOriginal<ProductType> = Extract<
   ProductType,
   FunctionType
 > extends infer T extends ConfigProductTypeBuilder
-  ? ReturnType<T>["_original"]
+  ? Call<T>["_original"]
+  : never;
+
+export type InferProductTypeShape<ProductType> = Extract<
+  ProductType,
+  FunctionType
+> extends infer T extends ConfigProductTypeBuilder
+  ? Call<T>["_shape"]
   : never;
 
 // ===== ALL TYPES =====
