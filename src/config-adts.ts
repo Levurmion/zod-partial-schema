@@ -74,25 +74,52 @@ type GetConfigNakedType<O> = Extract<ConfigNakedTypesMap, [O, unknown]>[1];
 // ===== PRODUCT TYPES =====
 declare const TYPE: unique symbol;
 
+interface ObjectConfig {
+  [TYPE]: string;
+  shape: RawObjectTypeConfigShape;
+}
+
+type RawObjectTypeConfigShape = { [k: string]: RawConfigNode };
+type RawArrayTypeConfigShape = RawConfigNode[];
+
 type ObjectTypeConfigShape = { [k: string]: ConfigNode };
-type ArrayTypeConfigShape = ConfigNode[];
 
 // strict object
-type StrictObject<Shape extends ObjectTypeConfigShape> = {
+type RawStrictObject<
+  Shape extends RawObjectTypeConfigShape = RawObjectTypeConfigShape
+> = {
   [TYPE]: "strict";
-} & Shape;
+  shape: Shape;
+};
+
+type StrictObject<Shape extends ObjectTypeConfigShape = ObjectTypeConfigShape> =
+  {
+    [TYPE]: "strict";
+    shape: Shape;
+  };
 
 // loose object
-type LooseObject<Shape extends ObjectTypeConfigShape> = {
+type RawLooseObject<
+  Shape extends RawObjectTypeConfigShape = RawObjectTypeConfigShape
+> = {
   [TYPE]: "loose";
-} & Shape;
+  shape: Shape;
+};
+
+type LooseObject<Shape extends ObjectTypeConfigShape = ObjectTypeConfigShape> =
+  {
+    [TYPE]: "loose";
+    shape: Shape;
+  };
 
 // ===== BUILDERS =====
 type ObjectTypeConfigBuilder<
   O extends OriginalObjectType = OriginalObjectType
-> = () =>
-  | StrictObject<{ [K in keyof O]: CreateConfig<O[K]> }>
-  | LooseObject<Partial<{ [K in keyof O]: CreateConfig<O[K]> }>>;
+> = (
+  compiler: ConfigCompiler
+) =>
+  | RawStrictObject<{ [K in keyof O]: CreateConfig<O[K]> }>
+  | RawLooseObject<Partial<{ [K in keyof O]: CreateConfig<O[K]> }>>;
 
 // ===== ALL TYPES =====
 
@@ -105,8 +132,16 @@ export type OriginalTypes =
 type OriginalObjectType = { [k: string]: OriginalTypes };
 type OriginalArrayType = OriginalTypes[];
 
-// emitted configuration nodes with respect to the passed OriginalTypes
-export type ConfigNode = ConfigNakedTypes | ObjectTypeConfigBuilder | undefined;
+export type RawConfigNode =
+  | ConfigNakedTypes
+  | ObjectTypeConfigBuilder
+  | undefined;
+
+export type ConfigNode =
+  | ConfigNakedTypes
+  | RawStrictObject
+  | RawLooseObject
+  | undefined;
 
 // Nodes after all builders have been called and resolved
 export type Node = ConfigNakedTypes;
@@ -134,6 +169,23 @@ export function createConfig<O extends OriginalTypes>() {
   };
 }
 
+// ===== CONFIG COMPILER =====
+export type CompileConfig<Config extends ConfigNode> = Extract<
+  Config extends ObjectConfig ? CompileConfig_Object<Config> : Config,
+  z.ZodType
+>;
+
+type CompileConfig_Object<Config extends ObjectConfig> =
+  Config extends StrictObject<infer S>
+    ? z.ZodObject<{ [K in keyof S]: CompileConfig<S[K]> }>
+    : Config extends LooseObject<infer S>
+    ? z.ZodObject<{ [K in keyof S]: CompileConfig<S[K]> }>
+    : never;
+
+type ConfigCompiler = <Config extends ConfigNode>(
+  config: Config
+) => CompileConfig<Config>;
+
 type Example = {
   a: {
     b: string;
@@ -145,12 +197,19 @@ type Example = {
   d: string;
 };
 
-const config = createConfig<Example>()(() => ({
-  [TYPE]: "loose",
-  a: () => ({
-    [TYPE]: "strict",
-    b: z.string(),
-    c: z.number(),
-    nested: () => ({ [TYPE]: "loose" }),
-  }),
-}));
+const config = createConfig<Example>()((compiler) =>
+  compiler({
+    [TYPE]: "loose",
+    shape: {
+      a: (compiler) =>
+        compiler({
+          [TYPE]: "strict",
+          shape: {
+            b: z.string(),
+            c: z.number(),
+            nested: (compiler) => compiler({ [TYPE]: "loose", shape: {} }),
+          },
+        }),
+    },
+  })
+);
