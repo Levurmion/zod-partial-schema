@@ -72,36 +72,41 @@ type OriginalNakedTypes = ConfigNakedTypesMap[0];
 type GetConfigNakedType<O> = Extract<ConfigNakedTypesMap, [O, unknown]>[1];
 
 // ===== PRODUCT TYPES =====
-declare const STRICT: unique symbol;
-declare const LOOSE: unique symbol;
+declare const TYPE: unique symbol;
 
-type ObjectTypeOriginalShape = Record<string, OriginalTypes>;
-type ObjectTypeConfigShape = Record<string, ConfigNode>;
-type ObjectTypeShape = Record<string, Node>;
+type ObjectTypeConfigShape = { [k: string]: ConfigNode };
+type ArrayTypeConfigShape = ConfigNode[];
 
 // strict object
-interface StrictObjectConfigShape<Shape extends ObjectTypeConfigShape> {
-  configType: "strict";
-  shape: Shape;
-}
+type StrictObject<Shape extends ObjectTypeConfigShape> = {
+  [TYPE]: "strict";
+} & Shape;
 
 // loose object
-interface LooseObjectConfigShape<Shape extends ObjectTypeConfigShape> {
-  configType: "loose";
-  shape: Shape;
-}
+type LooseObject<Shape extends ObjectTypeConfigShape> = {
+  [TYPE]: "loose";
+} & Shape;
 
-// ===== PRODUCT TYPE CONSTRUCTORS =====
-
-// ===== PRODUCT TYPE UNIONS =====
+// ===== BUILDERS =====
+type ObjectTypeConfigBuilder<
+  O extends OriginalObjectType = OriginalObjectType
+> = () =>
+  | StrictObject<{ [K in keyof O]: CreateConfig<O[K]> }>
+  | LooseObject<Partial<{ [K in keyof O]: CreateConfig<O[K]> }>>;
 
 // ===== ALL TYPES =====
 
 // permitted types that can be mapped to Zod types and builders
-export type OriginalTypes = OriginalNakedTypes | { [k: string]: OriginalTypes };
+
+export type OriginalTypes =
+  | OriginalNakedTypes
+  | OriginalObjectType
+  | OriginalArrayType;
+type OriginalObjectType = { [k: string]: OriginalTypes };
+type OriginalArrayType = OriginalTypes[];
 
 // emitted configuration nodes with respect to the passed OriginalTypes
-export type ConfigNode = ConfigNakedTypes | undefined;
+export type ConfigNode = ConfigNakedTypes | ObjectTypeConfigBuilder | undefined;
 
 // Nodes after all builders have been called and resolved
 export type Node = ConfigNakedTypes;
@@ -111,14 +116,15 @@ export type Node = ConfigNakedTypes;
 export type CreateConfig<O extends OriginalTypes> = IsLiteral<O> extends true
   ? CreateConfig_Literal<O>
   : IsObject<O> extends true
-  ? O extends ObjectTypeOriginalShape
+  ? O extends OriginalObjectType
     ? CreateConfig_Object<O>
     : never
   : GetConfigNakedType<O>;
 
 type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
-type CreateConfig_Object<O extends ObjectTypeOriginalShape> = never;
+type CreateConfig_Object<O extends OriginalObjectType> =
+  ObjectTypeConfigBuilder<O>;
 
 export function createConfig<O extends OriginalTypes>() {
   return function configCreator<Config extends CreateConfig<O>>(
@@ -139,13 +145,12 @@ type Example = {
   d: string;
 };
 
-const config = createConfig<Example>()(({ loose }) =>
-  loose({
-    a: ({ strict }) =>
-      strict({
-        b: z.string(),
-        c: z.number(),
-        nested: ({ loose }) => loose({}),
-      }),
-  })
-);
+const config = createConfig<Example>()(() => ({
+  [TYPE]: "loose",
+  a: () => ({
+    [TYPE]: "strict",
+    b: z.string(),
+    c: z.number(),
+    nested: () => ({ [TYPE]: "loose" }),
+  }),
+}));
