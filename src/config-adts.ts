@@ -78,36 +78,24 @@ type ObjectTypeOriginalShape = Record<string, OriginalTypes>;
 type ObjectTypeConfigShape = Record<string, ConfigNode>;
 type ObjectTypeShape = Record<string, Node>;
 
-interface ProductTypeConfigShape {
-  configType: ProductTypeTags;
-}
-
-interface ProductTypeShape {
-  type: ProductTypeTags;
-}
-
 // strict object
-interface StrictObjectConfigShape<Shape extends ObjectTypeConfigShape>
-  extends ProductTypeConfigShape {
+interface StrictObjectConfigShape<Shape extends ObjectTypeConfigShape> {
   configType: "strict";
   shape: Shape;
 }
 
-interface StrictObjectShape<Shape extends ObjectTypeShape>
-  extends ProductTypeShape {
+interface StrictObjectShape<Shape extends ObjectTypeShape> {
   type: "strict";
   shape: Shape;
 }
 
 // loose object
-interface LooseObjectConfigShape<Shape extends ObjectTypeConfigShape>
-  extends ProductTypeConfigShape {
+interface LooseObjectConfigShape<Shape extends ObjectTypeConfigShape> {
   configType: "loose";
   shape: Shape;
 }
 
-interface LooseObjectShape<Shape extends ObjectTypeShape>
-  extends ProductTypeShape {
+interface LooseObjectShape<Shape extends ObjectTypeShape> {
   type: "loose";
   shape: Shape;
 }
