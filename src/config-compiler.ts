@@ -40,7 +40,7 @@ type NumberTypes =
 
 type UndefinedTypes = z.ZodUndefined;
 
-type NullTypes = z.ZodUndefined;
+type NullTypes = z.ZodNull;
 
 type SymbolTypes = z.ZodSymbol;
 
@@ -86,6 +86,7 @@ export type OriginalTypes =
   | OriginalNakedTypes
   | OriginalObjectType
   | OriginalArrayType;
+
 type OriginalObjectType = { [k: string]: OriginalTypes };
 type OriginalArrayType = OriginalTypes[];
 
@@ -102,39 +103,39 @@ export type CreateConfig<O extends OriginalTypes> = IsLiteral<O> extends true
   ? BooleanTypes
   : O extends OriginalObjectType
   ? CreateConfig_Object<O>
+  : O extends OriginalArrayType
+  ? CreateConfig_Array<O>
   : GetConfigNakedType<O>;
 
 type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
-type CreateConfig_Object<
-  O extends OriginalObjectType = OriginalObjectType,
-  BaseShape extends {
-    [K in keyof O]?: CreateConfig<O[K]>;
-  } = { [K in keyof O]?: CreateConfig<O[K]> }
-> = (
-  object: <Shape extends BaseShape>(
+type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> = (
+  object: <Shape extends { [K in keyof O]?: CreateConfig<O[K]> }>(
     config: Shape
   ) => ResolveObjectConfig<Shape, O>
+) => z.ZodType;
+
+type CreateConfig_Array<O extends OriginalArrayType> = (
+  array: <Shape extends CreateConfig<O[number]>[]>(
+    config: Shape
+  ) => ResolveArrayConfig<Shape>
 ) => z.ZodType;
 
 // ===== CONFIG RESOLVER =====
 type ResolveConfig<Config> = Config extends FunctionType
   ? Call<Config>
-  : Config;
+  : Config extends z.ZodType
+  ? Config
+  : never;
 
 type ResolveObjectConfig<
   Config,
   Original extends OriginalObjectType
 > = IsObject<Config> extends true
   ? {
+      // remove undefined as this is a side effect of applying Partial
       [K in keyof Config]: Exclude<Config[K], undefined> extends infer Value
-        ? Value extends z.ZodType
-          ? // if Value is a ZodType, it is a naked type so just return it
-            Config[K]
-          : Config[K] extends FunctionType
-          ? // if Value is a function, it is a product type so we inspect the ReturnType of the builder function
-            Call<Config[K]>
-          : never
+        ? ResolveConfig<Value>
         : never;
       // ensure that the resolved shape extends ZodShape required by objects
     } extends infer ResolvedShape extends core.$ZodShape
@@ -161,10 +162,18 @@ type MergeObjectIO<
   ? Merge<Original, IO>
   : never;
 
+type ResolveArrayConfig<Config> = Config extends unknown[]
+  ? ResolveConfig<
+      Config[number]
+    > extends infer ResolvedElements extends core.SomeType
+    ? z.ZodArray<ResolvedElements>
+    : never
+  : never;
+
 const createSchema =
   <T extends OriginalTypes>() =>
   <Config extends CreateConfig<T>>(config: Config) =>
-    config as Config extends FunctionType ? Call<Config> : Config;
+    config as ResolveConfig<Config>;
 
 type Example = {
   a: {
@@ -175,6 +184,7 @@ type Example = {
     };
   };
   b: number;
+  arr: { a: null; b: { nested: string } }[];
 };
 
 const schema = createSchema<Example>()((object) =>
@@ -184,5 +194,13 @@ const schema = createSchema<Example>()((object) =>
         aa: z.string().transform((v) => parseInt(v)),
         ab: z.boolean().transform(() => 1),
       }),
+    arr: (array) =>
+      array([
+        (object) =>
+          object({
+            a: z.null(),
+            b: (object) => object({ nested: z.string() }),
+          }),
+      ]),
   })
 );
