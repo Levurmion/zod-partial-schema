@@ -46,7 +46,7 @@ type SymbolTypes = z.ZodSymbol;
 
 type DateTypes = z.ZodDate;
 
-type BooleanTypes = z.ZodBoolean;
+type BooleanTypes = z.ZodBoolean | TypedZodPipe<z.ZodBoolean>;
 
 type ConfigNakedTypes =
   | StringTypes
@@ -69,7 +69,14 @@ type ConfigNakedTypesMap =
 
 type OriginalNakedTypes = ConfigNakedTypesMap[0];
 
-type GetConfigNakedType<O> = Extract<ConfigNakedTypesMap, [O, unknown]>[1];
+type GetConfigNakedType<O> =
+  | Extract<ConfigNakedTypesMap, [O, unknown]>[1]
+  | TypedZodPipe<Extract<ConfigNakedTypesMap, [O, unknown]>[1]>;
+
+type TypedZodPipe<InputSchema extends z.ZodType> = z.ZodPipe<
+  InputSchema,
+  core.SomeType
+>;
 
 // ===== ALL TYPES =====
 
@@ -87,49 +94,56 @@ export type ConfigNode = ConfigNakedTypes | undefined;
 // Nodes after all builders have been called and resolved
 export type Node = ConfigNakedTypes;
 
-// ===== CONFIG COMPILER GENERIC =====
+// ===== CONFIG CREATOR GENERIC =====
 
-export type CreateCompilerConfig<O extends OriginalTypes> =
-  IsLiteral<O> extends true
-    ? CreateCompilerConfig_Literal<O>
-    : O extends OriginalObjectType
-    ? CreateCompilerConfig_Object<O>
-    : O extends boolean
-    ? z.ZodBoolean
-    : GetConfigNakedType<O>;
+export type CreateConfig<O extends OriginalTypes> = IsLiteral<O> extends true
+  ? CreateConfig_Literal<O>
+  : O extends boolean
+  ? BooleanTypes
+  : O extends OriginalObjectType
+  ? CreateConfig_Object<O>
+  : GetConfigNakedType<O>;
 
-type CreateCompilerConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
+type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
-type CreateCompilerConfig_Object<
+type CreateConfig_Object<
   O extends OriginalObjectType = OriginalObjectType,
-  ExpectedShape extends {
-    [K in keyof O]?: CreateCompilerConfig<O[K]>;
-  } = { [K in keyof O]?: CreateCompilerConfig<O[K]> }
+  BaseShape extends {
+    [K in keyof O]?: CreateConfig<O[K]>;
+  } = { [K in keyof O]?: CreateConfig<O[K]> }
 > = (
-  compiler: <Shape extends ExpectedShape>(
+  object: <Shape extends BaseShape>(
     config: Shape
-  ) => CompileObjectConfig<Shape, O>
+  ) => ResolveObjectConfig<Shape, O>
 ) => z.ZodType;
 
-// ===== CONFIG COMPILER =====
-type CompileObjectConfig<
+// ===== CONFIG RESOLVER =====
+type ResolveConfig<Config> = Config extends FunctionType
+  ? Call<Config>
+  : Config;
+
+type ResolveObjectConfig<
   Config,
   Original extends OriginalObjectType
 > = IsObject<Config> extends true
   ? {
       [K in keyof Config]: Exclude<Config[K], undefined> extends infer Value
         ? Value extends z.ZodType
-          ? Config[K]
+          ? // if Value is a ZodType, it is a naked type so just return it
+            Config[K]
           : Config[K] extends FunctionType
-          ? Call<Config[K]>
+          ? // if Value is a function, it is a product type so we inspect the ReturnType of the builder function
+            Call<Config[K]>
           : never
         : never;
-    } extends infer CompiledShape extends core.$ZodLooseShape
-    ? z.ZodObject<
-        CompiledShape,
+      // ensure that the resolved shape extends ZodShape required by objects
+    } extends infer ResolvedShape extends core.$ZodShape
+    ? // create a ZodObject with a type signature that preserves properties in Original undeclared in ResolvedShape
+      z.ZodObject<
+        ResolvedShape,
         {
-          in: MergeObjectIO<Original, CompiledShape, "input">;
-          out: MergeObjectIO<Original, CompiledShape, "output">;
+          in: MergeObjectIO<Original, ResolvedShape, "input">;
+          out: MergeObjectIO<Original, ResolvedShape, "output">;
         }
       >
     : never
@@ -149,7 +163,7 @@ type MergeObjectIO<
 
 const createSchema =
   <T extends OriginalTypes>() =>
-  <Config extends CreateCompilerConfig<T>>(config: Config) =>
+  <Config extends CreateConfig<T>>(config: Config) =>
     config as Config extends FunctionType ? Call<Config> : Config;
 
 type Example = {
@@ -163,11 +177,12 @@ type Example = {
   b: number;
 };
 
-const schema = createSchema<Example>()((compile) =>
-  compile({
-    a: (compile) =>
-      compile({
-        aa: z.string(),
-      }).transform((arg) => arg.ab),
+const schema = createSchema<Example>()((object) =>
+  object({
+    a: (object) =>
+      object({
+        aa: z.string().transform((v) => parseInt(v)),
+        ab: z.boolean().transform(() => 1),
+      }),
   })
 );
