@@ -48,16 +48,6 @@ type DateTypes = z.ZodDate;
 
 type BooleanTypes = z.ZodBoolean | TypedZodPipe<z.ZodBoolean>;
 
-type ConfigNakedTypes =
-  | StringTypes
-  | NumberTypes
-  | UndefinedTypes
-  | NullTypes
-  | SymbolTypes
-  | DateTypes
-  | BooleanTypes
-  | z.ZodLiteral;
-
 type ConfigNakedTypesMap =
   | [string, StringTypes]
   | [number, NumberTypes]
@@ -90,11 +80,6 @@ export type OriginalTypes =
 type OriginalObjectType = { [k: string]: OriginalTypes };
 type OriginalArrayType = OriginalTypes[];
 
-export type ConfigNode = ConfigNakedTypes | undefined;
-
-// Nodes after all builders have been called and resolved
-export type Node = ConfigNakedTypes;
-
 // ===== CONFIG CREATOR GENERIC =====
 
 export type CreateConfig<O extends OriginalTypes> = IsLiteral<O> extends true
@@ -112,29 +97,30 @@ export type CreateConfig<O extends OriginalTypes> = IsLiteral<O> extends true
 
 type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
-type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> = (
-  object: <Shape extends CreateObjectShape<O>>(
-    config: Shape
-  ) => ResolveObjectConfig<Shape, O>
-) => z.ZodType;
+type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> =
+  (opt: {
+    object: <Shape extends CreateObjectShape<O>>(
+      config: Shape
+    ) => ResolveObjectConfig<Shape, O>;
+  }) => z.ZodType;
 
 type CreateObjectShape<O extends OriginalObjectType> = {
   [K in keyof O]?: CreateConfig<O[K]>;
 };
 
-type CreateConfig_Array<O extends OriginalArrayType> = (
+type CreateConfig_Array<O extends OriginalArrayType> = (opt: {
   array: <Shape extends CreateArrayShape<O>>(
     config: Shape
-  ) => ResolveArrayConfig<Shape>
-) => z.ZodType;
+  ) => ResolveArrayConfig<Shape>;
+}) => z.ZodType;
 
 type CreateArrayShape<O extends OriginalArrayType> = CreateConfig<O[number]>[];
 
-type CreateConfig_Tuple<O extends OriginalArrayType> = (
+type CreateConfig_Tuple<O extends OriginalArrayType> = (opt: {
   tuple: <Shape extends CreateTupleShape<O>>(
     config: Shape
-  ) => ResolveTupleConfig<Shape>
-) => z.ZodType;
+  ) => ResolveTupleConfig<Shape>;
+}) => z.ZodType;
 
 type CreateTupleShape<O extends OriginalArrayType> = O extends [
   infer First extends OriginalTypes,
@@ -214,31 +200,31 @@ type Example = {
     };
   };
   b: number;
-  arr: ({ a: null; b: { nested: string } } | number)[];
+  arr?: ({ a: null; b: { nested: string } } | number)[];
   tup: [number, boolean, { prop: number }];
 };
 
-const schema = createSchema<Example>()((object) =>
+const schema = createSchema<Example>()(({ object }) =>
   object({
-    a: (object) =>
+    a: ({ object }) =>
       object({
         aa: z.string().transform((v) => parseInt(v)),
         ab: z.boolean().transform(() => 1),
       }),
-    arr: (array) =>
+    arr: ({ array }) =>
       array([
-        (object) =>
+        ({ object }) =>
           object({
             a: z.null(),
-            b: (object) => object({ nested: z.string() }),
+            b: ({ object }) => object({ nested: z.string() }),
           }),
       ]),
-    tup: (tuple) =>
+    tup: ({ tuple }) =>
       tuple([
         z.number(),
         z.boolean(),
-        (object) => object({ prop: z.number(), extra: z.null() }),
-      ]).transform((arg) => arg[2]),
+        ({ object }) => object({ prop: z.number() }),
+      ]),
   })
 );
 
