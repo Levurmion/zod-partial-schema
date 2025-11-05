@@ -75,10 +75,12 @@ type TypedZodPipe<InputSchema extends z.ZodType> = z.ZodPipe<
 export type OriginalTypes =
   | OriginalNakedTypes
   | OriginalObjectType
-  | OriginalArrayType;
+  | OriginalArrayType
+  | OriginalTupleType;
 
-type OriginalObjectType = { [k: string]: OriginalTypes };
-type OriginalArrayType = OriginalTypes[];
+export type OriginalObjectType = { [k: string]: OriginalTypes };
+export type OriginalArrayType = OriginalTypes[];
+export type OriginalTupleType = readonly OriginalTypes[];
 
 // ===== CONFIG CREATOR GENERIC =====
 
@@ -104,7 +106,7 @@ type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> =
     ) => ResolveObjectConfig<Shape, O>;
   }) => z.ZodType;
 
-type CreateObjectShape<O extends OriginalObjectType> = {
+export type CreateObjectShape<O extends OriginalObjectType> = {
   [K in keyof O]?: CreateConfig<O[K]>;
 };
 
@@ -117,23 +119,27 @@ type CreateConfig_Array<O extends OriginalArrayType = OriginalArrayType> =
     ) => ResolveArrayConfig<Shape>;
   }) => z.ZodType;
 
-type CreateArrayShape<O extends OriginalArrayType> = CreateConfig<O[number]>[];
+export type CreateArrayShape<O extends OriginalArrayType> = CreateConfig<
+  O[number]
+>[];
 
 export type ArrayShape = ConfigNode[];
 
-type CreateConfig_Tuple<O extends OriginalArrayType = OriginalArrayType> =
+type CreateConfig_Tuple<O extends OriginalTupleType = OriginalTupleType> =
   (opt: {
     tuple: <Shape extends CreateTupleShape<O>>(
       config: Shape
     ) => ResolveTupleConfig<Shape>;
   }) => z.ZodType;
 
-type CreateTupleShape<O extends OriginalArrayType> = O extends [
+export type CreateTupleShape<O extends OriginalTupleType> = O extends [
   infer First extends OriginalTypes,
   ...infer Rest extends OriginalArrayType
 ]
   ? [CreateConfig<First>, ...CreateTupleShape<Rest>]
   : [];
+
+export type TupleShape = readonly ConfigNode[];
 
 export type ConfigNode =
   | z.ZodType
