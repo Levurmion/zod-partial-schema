@@ -1,4 +1,4 @@
-import type { Merge } from "type-fest";
+import type { Merge, UnionToIntersection } from "type-fest";
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
 
@@ -27,3 +27,7 @@ export type MergeObjectIO<
 ) extends infer IO
   ? Merge<Original, IO>
   : never;
+
+export type MergeBuilderFunctions<F extends FunctionType> = (
+  opt: UnionToIntersection<Parameters<F>[0]>
+) => ReturnType<F>;

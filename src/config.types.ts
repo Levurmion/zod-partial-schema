@@ -1,5 +1,11 @@
 import type { IsLiteral, IsTuple, IsUnion } from "type-fest";
-import type { Call, FunctionType, IsObject, MergeObjectIO } from "./types";
+import type {
+  Call,
+  FunctionType,
+  IsObject,
+  MergeBuilderFunctions,
+  MergeObjectIO,
+} from "./types";
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
 
@@ -84,9 +90,14 @@ export type OriginalTupleType = readonly OriginalTypes[];
 
 // ===== CONFIG CREATOR GENERIC =====
 
-export type CreateConfig<O extends OriginalTypes> =
-  | CreateConfig_Union<O>
-  | CreateConfig_Recursive<O>;
+export type CreateConfig<O extends OriginalTypes> = [
+  CreateConfig_Recursive<O>,
+  CreateConfig_Union<O>
+] extends [infer Rec extends ConfigNode, infer Union extends ConfigNode]
+  ?
+      | Exclude<Rec | Union, FunctionType>
+      | MergeBuilderFunctions<Extract<Rec | Union, FunctionType>>
+  : never;
 
 type CreateConfig_Recursive<O extends OriginalTypes> = IsLiteral<O> extends true
   ? CreateConfig_Literal<O>
@@ -105,12 +116,12 @@ type CreateConfig_Union<O extends OriginalTypes = OriginalTypes> =
     ? (opt: {
         union: <Shape extends CreateUnionShape<O>>(
           config: Shape
-        ) => ResolveArrayConfig<Shape>;
+        ) => ResolveUnionConfig<Shape>;
       }) => z.ZodType
     : never;
 
 export type CreateUnionShape<O extends OriginalTypes> = (
-  | (O extends unknown ? CreateConfig<O> : never)
+  | (O extends unknown ? CreateConfig_Recursive<O> : never)
   | HandleBooleanInUnion<O>
 )[];
 
@@ -163,11 +174,13 @@ export type TupleShape = readonly ConfigNode[];
 
 export type ConfigNode =
   | z.ZodType
-  | CreateConfig_Object
-  | CreateConfig_Array
-  | CreateConfig_Tuple
-  | CreateConfig_Union
-  | undefined;
+  | undefined
+  | MergeBuilderFunctions<
+      | CreateConfig_Object
+      | CreateConfig_Array
+      | CreateConfig_Tuple
+      | CreateConfig_Union
+    >;
 
 // ===== CONFIG RESOLVER =====
 export type ResolveConfig<Config> = Config extends FunctionType
@@ -198,6 +211,12 @@ type ResolveObjectConfig<
         }
       >
     : never
+  : never;
+
+type ResolveUnionConfig<Config extends unknown[]> = ResolveConfig<
+  Config[number]
+> extends infer ResolvedElements extends core.SomeType
+  ? z.ZodUnion<ResolvedElements[]>
   : never;
 
 type ResolveArrayConfig<Config extends unknown[]> = ResolveConfig<

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./create-schema";
 import * as z from "zod/v4";
+import type { CreateConfig } from "./config.types";
+import type { FunctionType, FunctionUnionSubtype } from "./types";
 
 describe("Naked Types", () => {
   it("string", () => {
@@ -183,6 +185,19 @@ describe("Product Types", () => {
 
   it("union", () => {
     type Union = boolean | number | { a: string };
+
+    const schema = createSchema<Union>()(({ union }) =>
+      union([
+        z.boolean(),
+        z.number(),
+        ({ object }) => object({ a: z.string() }),
+      ])
+    );
+
+    expect(schema.parse(true)).toEqual(true);
+    expect(schema.parse(false)).toEqual(false);
+    expect(schema.parse(123)).toEqual(123);
+    expect(schema.parse({ a: "string" })).toEqual({ a: "string" });
   });
 });
 
@@ -199,10 +214,7 @@ describe("createSchema Complex Type", () => {
   const schema = createSchema<ComplexType>()(({ object }) =>
     object({
       a: z.string(),
-      nested: ({ object }) =>
-        object({
-          c: z.number(),
-        }),
+      nested: ({ object }) => object({ c: z.number() }),
     })
   );
 
