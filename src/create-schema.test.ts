@@ -393,14 +393,24 @@ describe("union merging", () => {
   it("should merge undeclared simple union members and passthrough extra types", () => {
     type SimpleUnion = boolean | string | null;
 
+    const symbol = Symbol("");
     const partiaSimplelUnionSchema = createSchema<SimpleUnion>()(({ union }) =>
-      union([z.boolean().transform((_) => Symbol(""))])
+      union([z.boolean().transform((_) => symbol)])
     );
 
     const undeclaredMember = "string";
     expect(partiaSimplelUnionSchema.parse(undeclaredMember)).toBe(
       undeclaredMember
     );
+
+    const stringMember: SimpleUnion = "string";
+    const booleanMember: SimpleUnion = true;
+
+    // passes through undeclared member
+    expect(partiaSimplelUnionSchema.parse(stringMember)).toEqual(stringMember);
+
+    // transforms declared member
+    expect(partiaSimplelUnionSchema.parse(booleanMember)).toEqual(symbol);
 
     expectTypeOf<SimpleUnion>().toEqualTypeOf<
       z.input<typeof partiaSimplelUnionSchema>
@@ -428,6 +438,17 @@ describe("union merging", () => {
     const undeclaredMember = "string";
     expect(partialComplexUnionSchema.parse(undeclaredMember)).toBe(
       undeclaredMember
+    );
+
+    const objectMember: ComplexUnion = { a: "string" };
+    const tupleMember: ComplexUnion = [{ b: true }, ["string"]];
+
+    // passes through undeclared member
+    expect(partialComplexUnionSchema.parse(objectMember)).toEqual(objectMember);
+
+    // transforms declared member
+    expect(partialComplexUnionSchema.parse(tupleMember)).toEqual(
+      tupleMember[0]
     );
 
     expectTypeOf<ComplexUnion>().toEqualTypeOf<

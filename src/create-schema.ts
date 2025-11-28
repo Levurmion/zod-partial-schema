@@ -43,6 +43,10 @@ const tupleResolver = <Shape extends TupleShape>(config: Shape) => {
 
 const unionResolver = <Shape extends ArrayShape>(config: Shape) => {
   const shape = config.map((node) => resolveConfig(node));
+  /**
+   * At runtime, we allow extra union members to be passed through. We only
+   * validate the declared union members and transform them accordingly.
+   */
   return z.union(shape).or(z.unknown());
 };
 
