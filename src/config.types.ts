@@ -1,4 +1,4 @@
-import type { IsLiteral, IsTuple, IsUnion } from "type-fest";
+import type { IsLiteral, IsTuple, IsUnion, Merge } from "type-fest";
 import type {
   Call,
   FunctionType,
@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
+import type { output } from "zod/v3";
 
 // ===== NAKED TYPES =====
 
@@ -125,7 +126,7 @@ type CreateConfig_Union<O extends OriginalTypes = OriginalTypes> =
     ? (opt: {
         union: <Shape extends CreateUnionShape<O>>(
           config: Shape
-        ) => ResolveUnionConfig<Shape>;
+        ) => ResolveUnionConfig<Shape, O>;
       }) => z.ZodType
     : never;
 
@@ -200,9 +201,7 @@ type ResolveObjectConfig<
 > = IsObject<Config> extends true
   ? {
       // remove undefined as this is a side effect of applying Partial
-      [K in keyof Config]: Exclude<Config[K], undefined> extends infer Value
-        ? ResolveConfig<Value>
-        : never;
+      [K in keyof Config]: ResolveConfig<Exclude<Config[K], undefined>>;
       // ensure that the resolved shape extends ZodShape required by objects
     } extends infer ResolvedShape extends core.$ZodShape
     ? // create a ZodObject with a type signature that preserves properties in Original undeclared in ResolvedShape
@@ -216,10 +215,26 @@ type ResolveObjectConfig<
     : never
   : never;
 
-type ResolveUnionConfig<Config extends unknown[]> = ResolveConfig<
+type ResolveUnionConfig<
+  Config extends unknown[],
+  Original extends OriginalTypes
+> = ResolveConfig<
   Config[number]
 > extends infer ResolvedElements extends core.SomeType
-  ? z.ZodUnion<ResolvedElements[]>
+  ? z.ZodUnion<ResolvedElements[]> extends infer ZU extends z.ZodUnion
+    ? Merge<
+        ZU,
+        {
+          _zod: Merge<
+            ZU["_zod"],
+            {
+              input: z.input<ZU> | Original;
+              output: z.output<ZU> | Exclude<Original, z.input<ZU>>;
+            }
+          >;
+        }
+      >
+    : never
   : never;
 
 type ResolveArrayConfig<Config extends unknown> = z.ZodArray<

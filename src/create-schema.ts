@@ -43,7 +43,7 @@ const tupleResolver = <Shape extends TupleShape>(config: Shape) => {
 
 const unionResolver = <Shape extends ArrayShape>(config: Shape) => {
   const shape = config.map((node) => resolveConfig(node));
-  return z.union(shape);
+  return z.union(shape).or(z.unknown());
 };
 
 const resolverOptions = {
@@ -51,7 +51,7 @@ const resolverOptions = {
   array: arrayResolver,
   tuple: tupleResolver,
   union: unionResolver,
-} as BuilderFunctionOptions;
+} as unknown as BuilderFunctionOptions;
 
 const resolveConfig = <Config extends ConfigNode>(
   config: Config

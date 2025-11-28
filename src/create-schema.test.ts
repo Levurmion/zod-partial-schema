@@ -297,7 +297,7 @@ describe("transforms", () => {
   });
 });
 
-describe("createSchema Complex Type", () => {
+describe("object merging", () => {
   type ComplexType = {
     a: string;
     b: boolean;
@@ -354,7 +354,7 @@ describe("createSchema Complex Type", () => {
     expect(result).toEqual(extra);
   });
 
-  it("handles complex array nesting", () => {
+  it("handles complex nested arrays", () => {
     const schema = createSchema<ComplexType>()(({ object }) =>
       object({
         array: ({ array }) =>
@@ -374,5 +374,68 @@ describe("createSchema Complex Type", () => {
     );
 
     expectTypeOf<ComplexType>().branded.toEqualTypeOf<z.infer<typeof schema>>();
+
+    const complexNestedArray = {
+      array: [
+        [true],
+        {
+          a: "string",
+          b: 123,
+        },
+        ["one", "two", "three"],
+      ],
+    };
+    expect(schema.parse(complexNestedArray)).toEqual(complexNestedArray);
+  });
+});
+
+describe("union merging", () => {
+  it("should merge undeclared simple union members and passthrough extra types", () => {
+    type SimpleUnion = boolean | string | null;
+
+    const partiaSimplelUnionSchema = createSchema<SimpleUnion>()(({ union }) =>
+      union([z.boolean().transform((_) => Symbol(""))])
+    );
+
+    const undeclaredMember = "string";
+    expect(partiaSimplelUnionSchema.parse(undeclaredMember)).toBe(
+      undeclaredMember
+    );
+
+    expectTypeOf<SimpleUnion>().toEqualTypeOf<
+      z.input<typeof partiaSimplelUnionSchema>
+    >();
+    // substitutes the declared union member with its transformation output
+    expectTypeOf<symbol | string | null>().toEqualTypeOf<
+      z.output<typeof partiaSimplelUnionSchema>
+    >();
+  });
+
+  it("should merge undeclared complex union members and passthrough extra types", () => {
+    type ComplexUnion = { a: string } | number[] | [{ b: boolean }, string[]];
+
+    const partialComplexUnionSchema = createSchema<ComplexUnion>()(
+      ({ union }) =>
+        union([
+          ({ tuple }) =>
+            tuple([
+              ({ object }) => object({ b: z.boolean() }),
+              ({ array }) => array(z.string()),
+            ]).transform(([first]) => first),
+        ])
+    );
+
+    const undeclaredMember = "string";
+    expect(partialComplexUnionSchema.parse(undeclaredMember)).toBe(
+      undeclaredMember
+    );
+
+    expectTypeOf<ComplexUnion>().toEqualTypeOf<
+      z.input<typeof partialComplexUnionSchema>
+    >();
+    // substitutes the declared union member with its transformation output
+    expectTypeOf<{ a: string } | number[] | { b: boolean }>().toEqualTypeOf<
+      z.output<typeof partialComplexUnionSchema>
+    >();
   });
 });

@@ -31,3 +31,8 @@ export type MergeObjectIO<
 export type MergeBuilderFunctions<F extends FunctionType> = (
   opt: UnionToIntersection<Parameters<F>[0]>
 ) => ReturnType<F>;
+
+export type IO = {
+  in: unknown;
+  out: unknown;
+};
