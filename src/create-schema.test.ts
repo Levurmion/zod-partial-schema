@@ -460,3 +460,35 @@ describe("union merging", () => {
     >();
   });
 });
+
+describe("linting options", () => {
+  describe("assertSchemaInput = false", () => {
+    it("objects", () => {
+      type Object = {
+        a: string;
+        b: boolean;
+        c: number;
+      };
+
+      const freeSchemaInput = createSchema<
+        Object,
+        { assertSchemaInput: false }
+      >()(({ object }) =>
+        object({
+          a: z.boolean(),
+        })
+      );
+
+      expectTypeOf<{ a: boolean; b: boolean; c: number }>().toEqualTypeOf<
+        z.input<typeof freeSchemaInput>
+      >();
+      expectTypeOf<{ a: boolean; b: boolean; c: number }>().toEqualTypeOf<
+        z.output<typeof freeSchemaInput>
+      >();
+    });
+
+    it("arrays", () => {
+      expect(false).toBe(false);
+    });
+  });
+});

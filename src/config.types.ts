@@ -8,7 +8,7 @@ import type {
 } from "./types";
 import * as z from "zod/v4";
 import * as core from "zod/v4/core";
-import type { output } from "zod/v3";
+import type { DefaultLinterOptions, LinterOptions } from "./linter";
 
 // ===== NAKED TYPES =====
 
@@ -100,45 +100,59 @@ export type ConfigNode = z.ZodType | undefined | BuilderFunctions;
 
 // ===== CONFIG CREATOR GENERIC =====
 
-export type CreateConfig<O extends OriginalTypes> = [
-  CreateConfig_Singleton<O>,
-  CreateConfig_Union<O>
+export type CreateConfig<
+  O extends OriginalTypes,
+  Options extends LinterOptions = DefaultLinterOptions
+> = [
+  CreateConfig_Singleton<O, Options>,
+  CreateConfig_Union<O, Options>
 ] extends [infer Single extends ConfigNode, infer Union extends ConfigNode]
   ?
       | Exclude<Single | Union, FunctionType>
       | MergeBuilderFunctions<Extract<Single | Union, FunctionType>>
   : never;
 
-type CreateConfig_Singleton<O extends OriginalTypes> = IsLiteral<O> extends true
+type CreateConfig_Singleton<
+  O extends OriginalTypes,
+  Options extends LinterOptions = DefaultLinterOptions
+> = IsLiteral<O> extends true
   ? CreateConfig_Literal<O>
   : O extends boolean
   ? ZodBooleanTypes
   : O extends OriginalObjectType
-  ? CreateConfig_Object<O>
+  ? CreateConfig_Object<O, Options>
   : O extends OriginalArrayType
   ? IsTuple<O> extends true
     ? CreateConfig_Tuple<O>
     : CreateConfig_Array<O>
   : GetConfigNakedType<O>;
 
-type CreateConfig_Union<O extends OriginalTypes = OriginalTypes> =
-  IsUnion<O> extends true
-    ? (opt: {
-        union: <Shape extends CreateUnionShape<O>>(
-          config: Shape
-        ) => ResolveUnionConfig<Shape, O>;
-      }) => z.ZodType
-    : never;
+type CreateConfig_Union<
+  O extends OriginalTypes = OriginalTypes,
+  Options extends LinterOptions = DefaultLinterOptions
+> = IsUnion<O> extends true
+  ? (opt: {
+      union: <Shape extends CreateUnionShape<O, Options>>(
+        config: Shape
+      ) => ResolveUnionConfig<Shape, O>;
+    }) => z.ZodType
+  : never;
 
-export type CreateUnionShape<O extends OriginalTypes> = (
-  | Exclude<HandleUnionMembers<O>, FunctionType>
-  | MergeBuilderFunctions<Extract<HandleUnionMembers<O>, FunctionType>>
+export type CreateUnionShape<
+  O extends OriginalTypes,
+  Options extends LinterOptions
+> = (
+  | Exclude<HandleUnionMembers<O, Options>, FunctionType>
+  | MergeBuilderFunctions<Extract<HandleUnionMembers<O, Options>, FunctionType>>
   | HandleBooleanInUnion<O>
 )[];
 
-type HandleUnionMembers<O extends OriginalTypes> = O extends unknown
+type HandleUnionMembers<
+  O extends OriginalTypes,
+  Options extends LinterOptions
+> = O extends unknown
   ? // distribute O to be interrogated per-union member
-    CreateConfig_Singleton<O>
+    CreateConfig_Singleton<O, Options>
   : never;
 
 type HandleBooleanInUnion<O extends OriginalTypes> = [boolean] extends [O]
@@ -147,15 +161,22 @@ type HandleBooleanInUnion<O extends OriginalTypes> = [boolean] extends [O]
 
 type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
-type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> =
-  (opt: {
-    object: <Shape extends CreateObjectShape<O>>(
-      config: Shape
-    ) => ResolveObjectConfig<Shape, O>;
-  }) => z.ZodType;
+type CreateConfig_Object<
+  O extends OriginalObjectType = OriginalObjectType,
+  Options extends LinterOptions = DefaultLinterOptions
+> = (opt: {
+  object: <Shape extends CreateObjectShape<O, Options>>(
+    config: Shape
+  ) => ResolveObjectConfig<Shape, O>;
+}) => Options["assertSchemaOutput"] extends true ? z.ZodType<O> : z.ZodType;
 
-export type CreateObjectShape<O extends OriginalObjectType> = {
-  [K in keyof O]?: CreateConfig<O[K]>;
+export type CreateObjectShape<
+  O extends OriginalObjectType,
+  Options extends LinterOptions = DefaultLinterOptions
+> = {
+  [K in keyof O]?:
+    | CreateConfig<O[K]>
+    | (Options["assertSchemaInput"] extends false ? z.ZodType : never);
 };
 
 export type ObjectShape = { [key: string]: ConfigNode };
@@ -188,7 +209,7 @@ export type CreateTupleShape<O extends OriginalTupleType> = O extends [
 
 export type TupleShape = readonly ConfigNode[];
 
-// ===== CONFIG RESOLVER =====
+// ===== CONFIG RESOLVERS =====
 export type ResolveConfig<Config> = Config extends FunctionType
   ? Call<Config>
   : Config extends z.ZodType
@@ -222,7 +243,7 @@ type ResolveUnionConfig<
   Config[number]
 > extends infer ResolvedElements extends core.SomeType
   ? z.ZodUnion<ResolvedElements[]> extends infer ZU extends z.ZodUnion
-    ? // we aim to directly modify the union's inferred input/output
+    ? // we aim to directly modify the union's inferred input/output, merging them with Original
       Merge<
         ZU,
         {

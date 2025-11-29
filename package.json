@@ -1,16 +1,11 @@
 {
   "name": "zod-partial-schema",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "module": "dist/index.js",
-  "files": [
-    "dist"
-  ],
+  "version": "0.1.0",
+  "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
-    "test": "vitest",
+    "test": "vitest --typecheck --reporter=verbose",
     "check-types": "tsc -p tsconfig.build.json --noEmit"
   },
   "license": "MIT",
@@ -18,11 +13,9 @@
     "access": "public"
   },
   "devDependencies": {
-    "type-fest": "^5.2.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.12",
-    "vitest": "^4.0.6",
-    "zod": "^4.1.12"
+    "vitest": "^4.0.14"
   },
   "peerDependencies": {
     "type-fest": "^5.2.0",
