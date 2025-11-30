@@ -556,5 +556,59 @@ describe("linting options", () => {
         z.output<typeof freeUnionSchema>
       >;
     });
+
+    it("nested", () => {
+      type Nested = {
+        a: string;
+        b: boolean;
+        nested: {
+          c: number;
+          array: number[];
+          tuple: [string, boolean, number];
+        };
+      };
+
+      const freeNestedSchemaNumber = createSchema<
+        Nested,
+        { assertSchemaInput: false }
+      >()(z.number());
+
+      expectTypeOf<number>().toEqualTypeOf<
+        z.input<typeof freeNestedSchemaNumber>
+      >();
+      expectTypeOf<number>().toEqualTypeOf<
+        z.output<typeof freeNestedSchemaNumber>
+      >();
+
+      const freeNestedSchemaPartial = createSchema<
+        Nested,
+        { assertSchemaInput: false }
+      >()(({ object }) =>
+        object({
+          a: z.number(),
+          nested: ({ object }) =>
+            object({
+              array: ({ array }) => array(z.boolean()),
+              tuple: ({ tuple }) => tuple([z.string(), z.string(), z.string()]),
+            }),
+        })
+      );
+
+      type ExpectedMergedType = {
+        a: number;
+        b: boolean;
+        nested: {
+          c: number;
+          array: boolean[];
+          tuple: [string, string, string];
+        };
+      };
+      expectTypeOf<ExpectedMergedType>().toEqualTypeOf<
+        z.input<typeof freeNestedSchemaPartial>
+      >();
+      expectTypeOf<ExpectedMergedType>().toEqualTypeOf<
+        z.output<typeof freeNestedSchemaPartial>
+      >();
+    });
   });
 });

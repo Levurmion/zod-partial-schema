@@ -109,14 +109,16 @@ export type ConfigNode = z.ZodType | undefined | BuilderFunctions;
 export type CreateConfig<
   O extends OriginalTypes,
   Options extends LinterOptions = DefaultLinterOptions
-> = [
-  CreateConfig_Singleton<O, Options>,
-  CreateConfig_Union<O, Options>
-] extends [infer Single extends ConfigNode, infer Union extends ConfigNode]
-  ?
-      | Exclude<Single | Union, FunctionType>
-      | MergeBuilderFunctions<Extract<Single | Union, FunctionType>>
-  : never;
+> =
+  | ([
+      CreateConfig_Singleton<O, Options>,
+      CreateConfig_Union<O, Options>
+    ] extends [infer Single extends ConfigNode, infer Union extends ConfigNode]
+      ?
+          | Exclude<Single | Union, FunctionType>
+          | MergeBuilderFunctions<Extract<Single | Union, FunctionType>>
+      : never)
+  | AllowAnyZodType<Options>;
 
 type CreateConfig_Singleton<
   O extends OriginalTypes,
@@ -183,7 +185,7 @@ export type CreateObjectShape<
   O extends OriginalObjectType,
   Options extends LinterOptions
 > = {
-  [K in keyof O]?: CreateConfig<O[K]> | AllowAnyZodType<Options>;
+  [K in keyof O]?: CreateConfig<O[K], Options> | AllowAnyZodType<Options>;
 };
 
 export type ObjectShape = { [key: string]: ConfigNode };
