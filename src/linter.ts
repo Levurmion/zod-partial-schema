@@ -1,3 +1,5 @@
+import * as z from "zod/v4";
+
 export type LinterOptions = {
   /**
    * Defaults to `false`. When set to `true`, asserts that the `Actual` shape
@@ -29,3 +31,19 @@ export type DefaultLinterOptions = {
   assertSchemaInput: true;
   assertSchemaOutput: false;
 };
+
+/**
+ * Add to a union the ability to use any `ZodType`.
+ */
+export type AllowAnyZodType<Options extends LinterOptions> =
+  Options["assertSchemaInput"] extends false ? z.ZodType : never;
+
+/**
+ * Enforce whether the output needs to extend `Original` or not.
+ */
+export type ZodTypeOutput<
+  Options extends LinterOptions,
+  Original
+> = Options["assertSchemaOutput"] extends true
+  ? z.ZodType<Original>
+  : z.ZodType;

@@ -463,6 +463,30 @@ describe("union merging", () => {
 
 describe("linting options", () => {
   describe("assertSchemaInput = false", () => {
+    it("primitive", () => {
+      const freePrimitiveSchema = createSchema<
+        string,
+        { assertSchemaInput: false }
+      >()(z.number());
+
+      expectTypeOf<number>().toEqualTypeOf<z.input<typeof freePrimitiveSchema>>;
+      expectTypeOf<number>().toEqualTypeOf<
+        z.output<typeof freePrimitiveSchema>
+      >;
+    });
+
+    it("literals", () => {
+      const freeLiteralSchema = createSchema<
+        123,
+        { assertSchemaInput: false }
+      >()(z.literal("string"));
+
+      expectTypeOf<"string">().toEqualTypeOf<z.input<typeof freeLiteralSchema>>;
+      expectTypeOf<"string">().toEqualTypeOf<
+        z.output<typeof freeLiteralSchema>
+      >;
+    });
+
     it("objects", () => {
       type Object = {
         a: string;
@@ -470,7 +494,7 @@ describe("linting options", () => {
         c: number;
       };
 
-      const freeSchemaInput = createSchema<
+      const freeObjectSchema = createSchema<
         Object,
         { assertSchemaInput: false }
       >()(({ object }) =>
@@ -480,15 +504,57 @@ describe("linting options", () => {
       );
 
       expectTypeOf<{ a: boolean; b: boolean; c: number }>().toEqualTypeOf<
-        z.input<typeof freeSchemaInput>
+        z.input<typeof freeObjectSchema>
       >();
       expectTypeOf<{ a: boolean; b: boolean; c: number }>().toEqualTypeOf<
-        z.output<typeof freeSchemaInput>
+        z.output<typeof freeObjectSchema>
       >();
     });
 
     it("arrays", () => {
-      expect(false).toBe(false);
+      type Array = (string | boolean | number)[];
+
+      const freeArraySchema = createSchema<
+        Array,
+        { assertSchemaInput: false }
+      >()(({ array }) => array(z.symbol()));
+
+      expectTypeOf<symbol[]>().toEqualTypeOf<z.input<typeof freeArraySchema>>();
+      expectTypeOf<symbol[]>().toEqualTypeOf<
+        z.output<typeof freeArraySchema>
+      >();
+    });
+
+    it("tuples", () => {
+      type Tuple = [string, boolean, number];
+
+      const freeTupleSchema = createSchema<
+        Tuple,
+        { assertSchemaInput: false }
+      >()(({ tuple }) => tuple([z.string(), z.boolean(), z.boolean()]));
+
+      expectTypeOf<[string, boolean, boolean]>().toEqualTypeOf<
+        z.input<typeof freeTupleSchema>
+      >();
+      expectTypeOf<[string, boolean, boolean]>().toEqualTypeOf<
+        z.output<typeof freeTupleSchema>
+      >();
+    });
+
+    it("unions", () => {
+      type Union = string | number | boolean;
+
+      const freeUnionSchema = createSchema<
+        Union,
+        { assertSchemaInput: false }
+      >()(({ union }) => union([z.symbol(), z.object({ a: z.string() })]));
+
+      expectTypeOf<symbol | { a: string }>().toEqualTypeOf<
+        z.input<typeof freeUnionSchema>
+      >;
+      expectTypeOf<symbol | { a: string }>().toEqualTypeOf<
+        z.output<typeof freeUnionSchema>
+      >;
     });
   });
 });
