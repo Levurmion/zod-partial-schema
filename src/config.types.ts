@@ -65,10 +65,9 @@ type ConfigNakedTypesMap =
 
 type OriginalNakedTypes = ConfigNakedTypesMap[0];
 
-type GetConfigNakedType<O, Options extends LinterOptions> =
+type GetConfigNakedType<O> =
   | Extract<ConfigNakedTypesMap, [O, unknown]>[1]
-  | TypedZodPipe<Extract<ConfigNakedTypesMap, [O, unknown]>[1]>
-  | AllowAnyZodType<Options>;
+  | TypedZodPipe<Extract<ConfigNakedTypesMap, [O, unknown]>[1]>;
 
 type TypedZodPipe<InputSchema extends z.ZodType> = z.ZodPipe<
   InputSchema,
@@ -117,9 +116,9 @@ type CreateConfig_Singleton<O extends OriginalTypes> = IsLiteral<O> extends true
   ? CreateConfig_Object<O>
   : O extends OriginalArrayType
   ? IsTuple<O> extends true
-    ? CreateConfig_Tuple<O, Options>
-    : CreateConfig_Array<O, Options>
-  : GetConfigNakedType<O, Options>;
+    ? CreateConfig_Tuple<O>
+    : CreateConfig_Array<O>
+  : GetConfigNakedType<O>;
 
 type CreateConfig_Union<O extends OriginalTypes = OriginalTypes> =
   IsUnion<O> extends true
@@ -134,7 +133,6 @@ export type CreateUnionShape<O extends OriginalTypes> = (
   | Exclude<HandleUnionMembers<O>, FunctionType>
   | MergeBuilderFunctions<Extract<HandleUnionMembers<O>, FunctionType>>
   | HandleBooleanInUnion<O>
-  | AllowAnyZodType<Options>
 )[];
 
 type HandleUnionMembers<O extends OriginalTypes> = O extends unknown
@@ -146,9 +144,7 @@ type HandleBooleanInUnion<O extends OriginalTypes> = [boolean] extends [O]
   ? ZodBooleanTypes
   : never;
 
-type CreateConfig_Literal<O, Options extends LinterOptions> =
-  | z.ZodLiteral<Extract<O, z.util.Literal>>
-  | AllowAnyZodType<Options>;
+type CreateConfig_Literal<O> = z.ZodLiteral<Extract<O, z.util.Literal>>;
 
 type CreateConfig_Object<O extends OriginalObjectType = OriginalObjectType> =
   (opt: {
@@ -163,42 +159,30 @@ export type CreateObjectShape<O extends OriginalObjectType> = {
 
 export type ObjectShape = { [key: string]: ConfigNode };
 
-type CreateConfig_Array<
-  O extends OriginalArrayType = OriginalArrayType,
-  Options extends LinterOptions = DefaultLinterOptions
-> = (opt: {
-  array: <Shape extends CreateArrayShape<O, Options>>(
-    config: Shape
-  ) => ResolveArrayConfig<Shape>;
-}) => z.ZodType;
+type CreateConfig_Array<O extends OriginalArrayType = OriginalArrayType> =
+  (opt: {
+    array: <Shape extends CreateArrayShape<O>>(
+      config: Shape
+    ) => ResolveArrayConfig<Shape>;
+  }) => z.ZodType;
 
-export type CreateArrayShape<
-  O extends OriginalArrayType,
-  Options extends LinterOptions
-> = CreateConfig<O[number]> | AllowAnyZodType<Options>;
+export type CreateArrayShape<O extends OriginalArrayType = OriginalArrayType> =
+  CreateConfig<O[number]>;
 
 export type ArrayShape = ConfigNode[];
 
-type CreateConfig_Tuple<
-  O extends OriginalTupleType = OriginalTupleType,
-  Options extends LinterOptions = DefaultLinterOptions
-> = (opt: {
-  tuple: <Shape extends CreateTupleShape<O, Options>>(
-    config: Shape
-  ) => ResolveTupleConfig<Shape>;
-}) => z.ZodType;
+type CreateConfig_Tuple<O extends OriginalTupleType = OriginalTupleType> =
+  (opt: {
+    tuple: <Shape extends CreateTupleShape<O>>(
+      config: Shape
+    ) => ResolveTupleConfig<Shape>;
+  }) => z.ZodType;
 
-export type CreateTupleShape<
-  O extends OriginalTupleType,
-  Options extends LinterOptions
-> = O extends [
+export type CreateTupleShape<O extends OriginalTupleType> = O extends [
   infer First extends OriginalTypes,
   ...infer Rest extends OriginalArrayType
 ]
-  ? [
-      CreateConfig<First, Options> | AllowAnyZodType<Options>,
-      ...CreateTupleShape<Rest, Options>
-    ]
+  ? [CreateConfig<First>, ...CreateTupleShape<Rest>]
   : [];
 
 export type TupleShape = readonly ConfigNode[];
@@ -232,41 +216,33 @@ type ResolveObjectConfig<
 
 type ResolveUnionConfig<
   Config extends unknown[],
-  Original extends OriginalTypes,
-  Options extends LinterOptions
+  Original extends OriginalTypes
 > = ResolveConfig<
   Config[number]
 > extends infer ResolvedElements extends core.SomeType
   ? z.ZodUnion<ResolvedElements[]> extends infer ZU extends z.ZodUnion
-    ? Options["assertSchemaInput"] extends false
-      ? /**
-         * If we are not asserting the schema input, we cannot be sure if the user wants to retain
-         * any of the Original types at all. We always override the Original types with what is
-         * actually declared.
-         */
-        ZU
-      : // we aim to directly modify the union's inferred input/output, merging them with Original
-        Merge<
-          ZU,
-          {
-            _zod: Merge<
-              ZU["_zod"],
-              {
-                // the input must be asserted as the Original type
-                input: z.input<ZU> | Original;
-                /**
-                 * the output asserted as:
-                 *
-                 * output of declared members + (Original types - input of declared members)
-                 *
-                 * This correctly represents any transformations that occur on declared
-                 * union members.
-                 */
-                output: z.output<ZU> | Exclude<Original, z.input<ZU>>;
-              }
-            >;
-          }
-        >
+    ? // we aim to directly modify the union's inferred input/output, merging them with Original
+      Merge<
+        ZU,
+        {
+          _zod: Merge<
+            ZU["_zod"],
+            {
+              // the input must be asserted as the Original type
+              input: z.input<ZU> | Original;
+              /**
+               * the output asserted as:
+               *
+               * output of declared members + (Original types - input of declared members)
+               *
+               * This correctly represents any transformations that occur on declared
+               * union members.
+               */
+              output: z.output<ZU> | Exclude<Original, z.input<ZU>>;
+            }
+          >;
+        }
+      >
     : never
   : never;
 
