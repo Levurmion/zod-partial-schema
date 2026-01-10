@@ -1,7 +1,7 @@
 # zod-partial-schema
 A small wrapper around zod that allows you to build schemas against Typescript types and perform type-safe partial schema transformations.
 
-## What is this useful for?
+## What is this useful for? 
 There has been a lot of discussion around declaring `zod` schemas against existing Typescript types. The typical advice is to declare your schemas as follows:
 
 ```ts
@@ -34,7 +34,7 @@ type EndpointResponse = {
 };
 ```
 
-This is a very real request payload that I've had to deal with at the workplace. Notice how the fields have inconsistent types and how many there are! In an ideal world, this would be a BE concern but for this example, lets treat it as a FE problem.
+This is a very real request payload that I've had to deal with at the workplace. Notice how the fields have inconsistent types and how many there are! In an ideal world, this would be a BE concern but for this example, lets treat it as a FE problem. If we were to allow type inconsistencies to naively propagate across the codebase, we'll end up with glue code everywhere. 😡 Our goal is to transform this type into something more consistently workable by our components.
 
 Using the canonical strategy, your schema would be declared like this:
 ```ts
@@ -184,13 +184,13 @@ type Output = z.output<typeof fooSchema>;
 //   }
 ```
 
-`createSchema` performs this recursively so you can do this for any level of nesting (as far as `tsc` allows). So while the initial boilerplate is heavier than a plain `zod` schema, you can imagine that you might save on significant LoCs for larger types.
+`createSchema` performs this recursively so you can do this for any level of nesting (as far as `tsc` allows). While the initial boilerplate is heavier than a plain `zod` schema, you can imagine that you might save on significant LoCs for larger types.
 
 You can create partial schemas without leaving undeclared fields as `unknown`.
 
 ### `createSchema` Does Not Validate Runtime Inputs
 
-By default, fields you do not declare will not be validated. Under the hood, `createSchema` makes use of `z.looseObject` to construct the schema and will allow additional fields to simply pass through. This brings us to our first ⛔️ antipattern.
+By default, fields you do not declare will not be validated. Under the hood, `createSchema` makes use of `z.looseObject` to construct the schema and will allow additional fields to simply pass through. Unions are also additionally merged with the `z.unknown()` parser to ensure that you can safely target transforms to parts of an union input without throwing a runtime error. This brings us to our first ⛔️ antipattern.
 
 > ⛔️ **DO NOT** use `createSchema` for transforming responses from third-party APIs you do not control. You want to be validating untrusted responses in full for security reasons.
 
@@ -269,13 +269,52 @@ The supplied arg is an object that can be destructured into:
 
 Each item is a small function wrapping their corresponding `zod` parsers. However, at any point, `createSchema` will enforce that you only have access to the types declared for that field. So in the case of our `country` field, trying to destructure `object` from the argument will not compile. If you have a union, you will also have access to the `union` parser.
 
-The key change here is that the arguments to these wrapped `object/array/tuple/union` functions are typed as the composition of other `Builder` functions that can construct the nested types. Each `Builder` is therefore recursively instantiating other `Builders` for its own internal types to ensure that only valid schemas can be constructed through the entire chain.
+The key change here is that the arguments to these wrapped `object/array/tuple/union` functions are typed as the composition of other `Builder` functions that can construct the nested types. Each `Builder` is therefore recursively instantiating other `Builders` for its own internal types to ensure that only valid schemas can be constructed throughout the entire chain.
 
-> 💡 While writing this, I ran into **"tagless-final"** which apparently is the term that FP programmers and language nerds use to refer to this pattern of embedding DSLs into a strongly-typed language. I have a strong interest in lang dev and type theory (I absolutely recommend the *Crafting Interpreters* book!). Though sad to admit that I haven't managed to invest as much time as I'd like into this hobby outside of my FE day job. 😢
+> 💡 While writing this, I came across **"tagless-final"** which apparently is the term that FP programmers and language nerds use to refer to this pattern of embedding DSLs into a strongly-typed language. I have strong interests in lang dev and type theory (I absolutely recommend the *Crafting Interpreters* book!). Though sad to admit that I haven't managed to invest as much time as I'd like into this hobby outside of my FE day job. 😢
 
 ### In Summary
 
 Use `createSchema` when:
 - You control your data source.
 - You have large object payloads but only require partial transforms.
-- You need untransformed types from the original payload merged into the partial schema.
+- You need untransformed types from the original payload merged into the partial, transformed schema.
+
+## Interesting DX Quirks 🧐
+
+I also noticed some probably less obvious emergent properties of this technique compared to the canonical strategy of declaring schemas against a typed `z.ZodType`. I'm not sure how helpful these would be in real life but they're worth highlighting nonetheless.
+
+### Type Errors Are Localised To Function Calls
+
+With the canonical approach, a drift between the original type and declared schema would result in a compile error like this:
+
+```ts
+const schema = z.object({
+  available_filters: z.object({
+    product: z.object({
+      department: optionSchema,
+      sub_department: optionSchema,
+      size: optionSchema,
+      sub_class: optionSchema,
+    }),
+    location: z.object({
+      country: z.array(stringOptionSchema).nullable(),
+      province: z.array(z.boolean()).nullable(), // say we put the wrong type here
+    }),
+    location_clusters: z.array(stringOptionSchema).nullable(),
+    product_groups: z.array(stringOptionSchema).nullable(),
+  }),
+}) satisfies z.ZodType<unknown, EndpointResponse>;
+```
+
+[image]
+
+With `createSchema`, the exact offending line will be highlighted directly in your editor - potentially making it easier to diagnose schema drifts.
+
+[image]
+
+### Type Autocompletes
+
+When building out your schema with the canonical strategy, you'll find that you get zero autocomplete assistance for fields or array/tuple elements. For large, deeply-nested objects, this can be mind-bending. `createSchema` will guide you through every level of the schema's construction.
+
+[image]
