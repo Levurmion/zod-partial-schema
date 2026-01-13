@@ -1,4 +1,4 @@
-# zod-partial-schema
+# zod-partial-transforms
 A small wrapper around zod that allows you to build schemas against Typescript types and perform type-safe partial schema transformations.
 
 ## What is this useful for? 
